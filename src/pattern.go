@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/junegunn/fzf/src/algo"
+	"github.com/lpm11/fzf/src/algo"
 	"github.com/junegunn/fzf/src/util"
 )
 
@@ -26,6 +26,7 @@ const (
 	termPrefix
 	termSuffix
 	termEqual
+	termMigemo
 )
 
 type term struct {
@@ -132,6 +133,7 @@ func BuildPattern(fuzzy bool, extended bool, caseMode Case, forward bool,
 	ptr.procFun[termExact] = algo.ExactMatchNaive
 	ptr.procFun[termPrefix] = algo.PrefixMatch
 	ptr.procFun[termSuffix] = algo.SuffixMatch
+	ptr.procFun[termMigemo] = algo.MigemoMatch
 
 	_patternCache[asString] = ptr
 	return ptr
@@ -185,6 +187,9 @@ func parseTerms(fuzzy bool, caseMode Case, str string) []termSet {
 		} else if strings.HasSuffix(text, "$") {
 			typ = termSuffix
 			text = text[:len(text)-1]
+		} else if strings.HasPrefix(text, "~") {
+			typ = termMigemo
+			text = text[1:]
 		}
 
 		if len(text) > 0 {

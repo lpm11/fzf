@@ -3,8 +3,13 @@ package algo
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/junegunn/fzf/src/util"
+
+	"sync"
+	"regexp"
+	"github.com/koron/gomigemo/migemo"
 )
 
 /*
@@ -194,6 +199,69 @@ func EqualMatch(caseSensitive bool, forward bool, runes []rune, pattern []rune) 
 	}
 	if runesStr == string(pattern) {
 		return 0, len(pattern)
+	}
+	return -1, -1
+}
+
+
+type MigemoDictSingleton struct {
+	dict migemo.Dict
+}
+
+var migemoDict *MigemoDictSingleton
+var migemoDictSingletonMutex sync.Mutex
+
+func MigemoDictInstance() *MigemoDictSingleton {
+	migemoDictSingletonMutex.Lock()
+	if migemoDict == nil {
+		dict, err := migemo.LoadDefault()
+		if err != nil {
+			panic(err)
+		}
+
+		migemoDict = &MigemoDictSingleton{ dict }
+	}
+	migemoDictSingletonMutex.Unlock()
+	return migemoDict
+}
+
+var migemoPatternCache string
+var migemoRegexpCache *regexp.Regexp
+var migemoCacheMutex sync.Mutex
+
+func MigemoMatch(caseSensitive bool, forward bool, runes []rune, pattern []rune) (int, int) {
+	runesStr := string(runes)
+	patternStr := string(pattern)
+
+	migemoCacheMutex.Lock()
+	if migemoPatternCache != patternStr {
+		dict := MigemoDictInstance().dict
+		if dict == nil {
+			panic("MigemoDictInstance failed.")
+		}
+
+		migemoPattern, err := migemo.Pattern(dict, patternStr)
+		if err != nil {
+			panic(err)
+		}
+		if !caseSensitive {
+			migemoPattern = "(?i)" + migemoPattern
+		}
+		migemoRegexpCache, err = regexp.Compile(migemoPattern)
+		if err != nil {
+			panic(err)
+		}
+
+		migemoPatternCache = patternStr
+	}
+	migemoCacheMutex.Unlock()
+	r := migemoRegexpCache
+
+	loc := r.FindStringIndex(runesStr)
+	if loc != nil {
+		f := utf8.RuneCountInString(runesStr[:loc[0]])
+		l := utf8.RuneCountInString(runesStr[loc[0]:loc[1]])
+		return f, f + l
 	}
 	return -1, -1
 }
